@@ -1,154 +1,136 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<title>Drone Dashboard</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-<style>
-body{margin:0;font-family:Arial,sans-serif;background:#f5f6fa;}
-header{background:#2c3e50;color:#fff;padding:15px;font-size:1.3rem;}
-main{display:grid;grid-template-columns:2fr 2fr 1fr;gap:15px;padding:15px;height:calc(100vh - 60px);}
-#videoContainer{width:100%;height:100%;border-radius:12px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.15);}
-#videoContainer img{width:100%;height:100%;object-fit:cover;}
-#map{width:100%;height:100%;border-radius:12px;box-shadow:0 4px 10px rgba(0,0,0,.15);}
-.sidebar{background:#fff;border-radius:12px;padding:15px;box-shadow:0 4px 10px rgba(0,0,0,.1);overflow-y:auto;}
-.sidebar h2{font-size:1.1rem;margin-bottom:10px;}
-.alert-item{padding:8px;margin-bottom:8px;background:#ecf0f1;border-radius:8px;font-size:.9rem;line-height:1.3rem;}
-.switch-container{margin-bottom:10px;}
-button{margin-top:4px;margin-right:4px;padding:4px 8px;font-size:0.8rem;border:none;border-radius:4px;cursor:pointer;}
-button.safe{background:#2ecc71;color:#fff;}
-button.medical{background:#e74c3c;color:#fff;}
-</style>
+    <meta charset="UTF-8">
+    <title>Drone Control Dashboard</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <style>
+        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; }
+        header { background-color: #333; color: white; padding: 15px 20px; font-size: 1.5rem; text-align: center; }
+        main { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 20px; padding: 20px; height: calc(100vh - 70px); }
+        .card { background: white; border-radius: 12px; box-shadow: 0 6px 12px rgba(0,0,0,0.1); overflow: hidden; }
+        #videoContainer img { width: 100%; height: 100%; object-fit: cover; }
+        #map { width: 100%; height: 100%; }
+        .sidebar { padding: 20px; overflow-y: auto; }
+        .sidebar h2 { font-size: 1.2rem; margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .alert-item { padding: 12px; margin-bottom: 12px; background-color: #f8f9fa; border-left: 4px solid #007bff; border-radius: 8px; font-size: 0.9rem; }
+        .button-group { margin-top: 10px; }
+        button { padding: 6px 12px; font-size: 0.8rem; border: none; border-radius: 6px; cursor: pointer; color: white; margin-right: 5px; }
+        .safe { background-color: #28a745; }
+        .medical { background-color: #dc3545; }
+        .rescued { background-color: #17a2b8; }
+        .supplies { background-color: #ffc107; color: #333; }
+    </style>
 </head>
 <body>
-<header>🚁 Drone Dashboard (Live Location)</header>
-<main>
-<div id="videoContainer">
-<img id="videoFeed" src="http://127.0.0.1:8000/video" alt="Drone video feed"/>
-</div>
-<div id="map"></div>
-<div class="sidebar">
-<h2>Alerts & Drone Location</h2>
-<div class="switch-container">
-<label><input type="checkbox" id="toggleView"> Show Recent Only</label>
-</div>
-<div id="alertList"></div>
-</div>
-</main>
+    <header>🚁 Live Drone Surveillance Dashboard</header>
+    <main>
+        <div id="videoContainer" class="card">
+            <img id="videoFeed" src="http://127.0.0.1:8000/video" alt="Live Drone Feed"/>
+        </div>
+        <div id="map" class="card"></div>
+        <div class="sidebar card">
+            <h2>Real-time Alerts</h2>
+            <div id="alertList"></div>
+        </div>
+    </main>
 
-<script>
-const BASE_URL = "http://127.0.0.1:5000";
-let map, droneMarker;
-let droneLat=0,droneLon=0,droneTargetLat=0,droneTargetLon=0;
-let alertMarkers=[];
-const seenAlerts=new Set();
+    <script>
+        const BASE_URL = "http://127.0.0.1:5000";
+        let map, droneMarker;
+        let alertMarkers = [];
 
-const droneIcon=L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/512/847/847969.png',iconSize:[40,40],iconAnchor:[20,20]});
-const icons={
- detected:L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/512/149/149071.png',iconSize:[30,30],iconAnchor:[15,30]}),
- safe:L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/512/190/190411.png',iconSize:[30,30],iconAnchor:[15,30]}),
- medical:L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/512/3125/3125713.png',iconSize:[30,30],iconAnchor:[15,30]})
-};
+        // --- Map and Marker Icons ---
+        const droneIcon = L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/847/847969.png', iconSize: [40, 40], iconAnchor: [20, 20] });
+        const alertIcons = {
+            detected: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/149/149071.png', iconSize: [30, 30], iconAnchor: [15, 30] }),
+            safe: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/190/190411.png', iconSize: [30, 30], iconAnchor: [15, 30] }),
+            medical: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/3125/3125713.png', iconSize: [30, 30], iconAnchor: [15, 30] }),
+            rescued: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/2947/2947231.png', iconSize: [30, 30], iconAnchor: [15, 30] }),
+            supplies: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/3063/3063861.png', iconSize: [30, 30], iconAnchor: [15, 30] })
+        };
 
-function initMap(lat,lon){
- map=L.map('map').setView([lat,lon],14);
- L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
- maxZoom:19,attribution:'&copy; OpenStreetMap contributors'
- }).addTo(map);
- droneMarker=L.marker([lat,lon],{icon:droneIcon}).addTo(map);
-}
+        function initializeMap(lat, lon) {
+            map = L.map('map').setView([lat, lon], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+            droneMarker = L.marker([lat, lon], { icon: droneIcon }).addTo(map);
+        }
 
-function fetchData(){
- fetch(`${BASE_URL}/alerts`).then(res=>res.json()).then(data=>{
-  const alertList=document.getElementById('alertList');
-  alertList.innerHTML='';
+        async function fetchData() {
+            try {
+                // *** CORRECTED THIS LINE ***
+                const response = await fetch(`${BASE_URL}/alerts`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                updateUI(data);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
 
-  if(data.drone){
-    updateDronePosition(data.drone.lat,data.drone.lon);
-    const droneDiv=document.createElement('div');
-    droneDiv.className='alert-item';
-    droneDiv.style.background='#dff9fb';
-    droneDiv.innerHTML=`<strong>Drone Location</strong><br>Lat:${data.drone.lat.toFixed(6)}<br>Lon:${data.drone.lon.toFixed(6)}`;
-    alertList.appendChild(droneDiv);
-  }
+        function updateUI(data) {
+            if (data.drone) {
+                const { lat, lon } = data.drone;
+                droneMarker.setLatLng([lat, lon]);
+            }
 
-  alertMarkers.forEach(m=>map.removeLayer(m));
-  alertMarkers=[];
+            alertMarkers.forEach(marker => map.removeLayer(marker));
+            alertMarkers = [];
+            const alertList = document.getElementById('alertList');
+            alertList.innerHTML = '';
 
-  const showRecent=document.getElementById('toggleView').checked;
-  const now=Date.now();
+            data.alerts.slice().reverse().forEach(alert => {
+                const icon = alertIcons[alert.status] || alertIcons.detected;
+                const marker = L.marker([alert.lat, alert.lon], { icon }).addTo(map)
+                    .bindPopup(`<b>Status:</b> ${alert.status}<br><b>Time:</b> ${alert.time}<br><b>Coords:</b> ${alert.lat.toFixed(5)}, ${alert.lon.toFixed(5)}`);
+                alertMarkers.push(marker);
 
-  data.alerts.slice().reverse().forEach(alert=>{
-    const alertId=alert.id;
-    if(showRecent && !seenAlerts.has(alertId)) return;
-    seenAlerts.add(alertId);
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert-item';
+                alertDiv.innerHTML = `
+                    <strong>Time:</strong> ${alert.time}<br>
+                    <strong>Status:</strong> ${alert.status}<br>
+                    <strong>Location:</strong> ${alert.lat.toFixed(5)}, ${alert.lon.toFixed(5)}
+                    <div class="button-group">
+                        <button class="safe" onclick="updateAlertStatus('${alert.id}', 'safe')">Safe</button>
+                        <button class="medical" onclick="updateAlertStatus('${alert.id}', 'medical')">Medical</button>
+                        <button class="rescued" onclick="updateAlertStatus('${alert.id}', 'rescued')">Rescued</button>
+                        <button class="supplies" onclick="updateAlertStatus('${alert.id}', 'supplies')">Needs Supplies</button>
+                    </div>
+                `;
+                alertList.appendChild(alertDiv);
+            });
+        }
 
-    const marker=L.marker([alert.lat,alert.lon],{icon:icons[alert.status]}).addTo(map);
-    marker.bindPopup(`<b>Human</b><br>Status:${alert.status}<br>Lat:${alert.lat.toFixed(6)}<br>Lon:${alert.lon.toFixed(6)}<br>Time:${alert.time}`);
-    alertMarkers.push(marker);
+        async function updateAlertStatus(id, status) {
+            try {
+                await fetch(`${BASE_URL}/alert/${id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status })
+                });
+                fetchData();
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
 
-    const div=document.createElement('div');
-    div.className='alert-item';
-    div.innerHTML=`<strong>${alert.time}</strong><br>Lat:${alert.lat.toFixed(6)}<br>Lon:${alert.lon.toFixed(6)}<br>Status:${alert.status}<br>
-    <button class="safe" onclick="markStatus('${alert.id}','safe')">Safe</button>
-    <button class="medical" onclick="markStatus('${alert.id}','medical')">Medical</button>`;
-    alertList.appendChild(div);
-  });
- }).catch(err=>console.error('Fetch error:',err));
-}
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                pos => initializeMap(pos.coords.latitude, pos.coords.longitude),
+                () => initializeMap(11.0168, 76.9558)
+            );
+        } else {
+            initializeMap(11.0168, 76.9558);
+        }
 
-function markStatus(id,status){
- fetch(`${BASE_URL}/alert/${id}`,{
-  method:'PATCH',
-  headers:{'Content-Type':'application/json'},
-  body:JSON.stringify({status})
- }).then(()=>fetchData());
-}
-
-function updateDronePosition(lat,lon){
- droneTargetLat=lat;droneTargetLon=lon;
-}
-
-function moveDroneSmooth(){
- if(!droneMarker)return;
- const step=0.0005;
- let dLat=droneTargetLat-droneLat;
- let dLon=droneTargetLon-droneLon;
- if(Math.abs(dLat)<step&&Math.abs(dLon)<step){
-  droneLat=droneTargetLat;droneLon=droneTargetLon;
- }else{
-  droneLat+=dLat*0.1;droneLon+=dLon*0.1;
- }
- droneMarker.setLatLng([droneLat,droneLon]);
-}
-
-function sendDroneLocation(){
- if(navigator.geolocation){
-  navigator.geolocation.getCurrentPosition(
-   pos=>{
-    updateDronePosition(pos.coords.latitude,pos.coords.longitude);
-    fetch(`${BASE_URL}/alert`,{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({lat:pos.coords.latitude,lon:pos.coords.longitude,is_drone:true})
-    });
-   },
-   ()=>console.warn("Geolocation failed")
-  );
- }
-}
-
-if(navigator.geolocation){
- navigator.geolocation.getCurrentPosition(
-  pos=>initMap(pos.coords.latitude,pos.coords.longitude),
-  ()=>initMap(0,0)
- );
-}else initMap(0,0);
-
-setInterval(fetchData,1000);
-setInterval(sendDroneLocation,1000);
-setInterval(moveDroneSmooth,100);
-</script>
+        setInterval(fetchData, 2000);
+    </script>
 </body>
 </html>
