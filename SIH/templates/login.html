@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Start New Mission</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Poppins', sans-serif;
+            background: #f4f7f6;
+            color: #1d2d35;
+        }
+        .login-container {
+            background: white;
+            padding: 2.5rem 3rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            text-align: center;
+            border: 1px solid #e_a_ecf0;
+        }
+        h1 {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        p {
+            color: #7a8a94;
+            margin-bottom: 2rem;
+        }
+        #mission-name {
+            font-size: 1rem;
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 1.5rem;
+            border: 1px solid #ced4da;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        #start-button {
+            width: 100%;
+            padding: 12px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: white;
+            background-color: #20c997;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        #start-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>Mission Control</h1>
+        <p>Please enter a name for this operation.</p>
+        <form id="mission-form">
+            <input type="text" id="mission-name" placeholder="e.g., Sector-7G Search" required>
+            <button type="submit" id="start-button">Start Mission</button>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('mission-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const missionName = document.getElementById('mission-name').value;
+            if (!missionName) return;
+
+            await fetch('/operation/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mission_name: missionName })
+            });
+
+            // Redirect to the main dashboard
+            window.location.href = '/dashboard';
+        });
+    </script>
+</body>
+</html>
