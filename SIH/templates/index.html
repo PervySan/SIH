@@ -2,135 +2,253 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Drone Control Dashboard</title>
+    <title>Mission Control Dashboard</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; }
-        header { background-color: #333; color: white; padding: 15px 20px; font-size: 1.5rem; text-align: center; }
-        main { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 20px; padding: 20px; height: calc(100vh - 70px); }
-        .card { background: white; border-radius: 12px; box-shadow: 0 6px 12px rgba(0,0,0,0.1); overflow: hidden; }
-        #videoContainer img { width: 100%; height: 100%; object-fit: cover; }
+        /* All CSS styles remain the same */
+        :root {
+            --sidebar-width: 420px; --gap: 1.25rem; --font-family: 'Poppins', sans-serif;
+            --background-color: #f4f7f6; --card-background: #ffffff; --text-primary: #1d2d35;
+            --text-secondary: #7a8a94; --border-color: #e_a_ecf0; --color-primary: #007bff;
+            --color-success: #20c997; --color-danger: #e63946; --color-warning: #ff9f43;
+            --color-info: #00a8ff; --color-dark: #34495e; --color-rescued: #8e44ad;
+            --color-sos: #d90429;
+        }
+        body { margin: 0; font-family: var(--font-family); background-color: var(--background-color); color: var(--text-primary); }
+        .dashboard-container { display: flex; height: 100vh; }
+        #sidebar { width: var(--sidebar-width); background: var(--card-background); padding: var(--gap); display: flex; flex-direction: column; gap: var(--gap); border-right: 1px solid var(--border-color); box-shadow: 2px 0 15px rgba(0,0,0,0.03); }
+        .sidebar-card { background: var(--card-background); border: 1px solid var(--border-color); border-radius: 12px; display: flex; flex-direction: column; }
+        .card-header { font-size: 1.1rem; font-weight: 600; padding: 1rem; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 0.5rem; }
+        .card-content { padding: 1rem; }
+        #alerts-container { flex-grow: 1; overflow: hidden; }
+        #alertList { overflow-y: auto; height: 100%; padding-right: 10px; }
+        #main-content { flex-grow: 1; padding: var(--gap); display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; gap: var(--gap); }
+        .main-card { border-radius: 12px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.05); }
         #map { width: 100%; height: 100%; }
-        .sidebar { padding: 20px; overflow-y: auto; }
-        .sidebar h2 { font-size: 1.2rem; margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        .alert-item { padding: 12px; margin-bottom: 12px; background-color: #f8f9fa; border-left: 4px solid #007bff; border-radius: 8px; font-size: 0.9rem; }
-        .button-group { margin-top: 10px; }
-        button { padding: 6px 12px; font-size: 0.8rem; border: none; border-radius: 6px; cursor: pointer; color: white; margin-right: 5px; }
-        .safe { background-color: #28a745; }
-        .medical { background-color: #dc3545; }
-        .rescued { background-color: #17a2b8; }
-        .supplies { background-color: #ffc107; color: #333; }
+        #videoFeed { width: 100%; height: 100%; object-fit: cover; background-color: #000; }
+        .mission-timer { font-size: 2rem; font-weight: 700; color: var(--color-primary); text-align: center; margin-bottom: 1rem; }
+        .control-buttons { display: flex; gap: 1rem; }
+        .control-buttons button { flex-grow: 1; font-size: 1rem; font-weight: 500; padding: 12px; border-radius: 8px; border: none; cursor: pointer; color: white; transition: all 0.2s ease; }
+        .control-buttons button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        #btn-end { background-color: var(--color-danger); }
+        #btn-end:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; text-align: center; margin-top: 1.25rem; }
+        .stat-item .value { font-size: 1.75rem; font-weight: 600; color: var(--text-primary); }
+        .stat-item .label { font-size: 0.9rem; color: var(--text-secondary); }
+        .alert-item { padding: 1rem; margin-bottom: 0.75rem; border-left: 5px solid; border-radius: 8px; background: #f8f9fa; cursor: pointer; transition: all 0.2s ease; position: relative; }
+        .alert-item:hover { background: #f1f3f5; box-shadow: 0 4px 12px rgba(0,0,0,0.08); transform: translateX(5px); }
+        .alert-item.status-detected { border-color: var(--color-warning); }
+        .alert-item.status-medical { border-color: var(--color-danger); } .alert-item.status-rescued { border-color: var(--color-rescued); }
+        .alert-item.status-supplies { border-color: #e67e22; } .alert-item.status-died { border-color: var(--color-dark); }
+        .alert-item.status-sos { border-color: var(--color-sos); background: #fff0f3; }
+        .pin-icon { position: absolute; top: 10px; right: 10px; color: var(--color-sos); font-size: 1rem; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
+        .alert-details { font-size: 0.9rem; margin-bottom: 10px; color: var(--text-secondary); }
+        .button-group { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+        .button-group button { font-size: 0.8rem; padding: 5px 10px; border-radius: 20px; border: 1px solid var(--border-color); background: white; cursor: pointer; transition: all 0.2s ease; }
+        .button-group button:hover { color: white; transform: scale(1.05); }
+        .btn-medical:hover { background: var(--color-danger); border-color: var(--color-danger); }
+        .btn-rescued:hover { background: var(--color-rescued); border-color: var(--color-rescued); }
+        .btn-supplies:hover { background: #e67e22; border-color: #e67e22; }
+        .btn-died:hover { background: var(--color-dark); border-color: var(--color-dark); }
+        .btn-sos { border-color: var(--color-sos); color: var(--color-sos); font-weight: 600; }
+        .btn-sos:hover { background: var(--color-sos); border-color: var(--color-sos); color: white; }
     </style>
 </head>
 <body>
-    <header>🚁 Live Drone Surveillance Dashboard</header>
-    <main>
-        <div id="videoContainer" class="card">
-            <img id="videoFeed" src="http://127.0.0.1:8000/video" alt="Live Drone Feed"/>
-        </div>
-        <div id="map" class="card"></div>
-        <div class="sidebar card">
-            <h2>Real-time Alerts</h2>
-            <div id="alertList"></div>
-        </div>
-    </main>
+    <div class="dashboard-container">
+        <aside id="sidebar">
+            <div id="mission-control" class="sidebar-card">
+                <div class="card-header" id="mission-header"><i class="fa-solid fa-satellite-dish"></i> <span>Loading Mission...</span></div>
+                <div class="card-content">
+                    <div class="mission-timer" id="mission-timer">00:00:00</div>
+                    <div class="control-buttons">
+                        <button id="btn-end"><i class="fa-solid fa-stop"></i> End & Generate Report</button>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-item"><div class="value" id="stat-sos">0</div><div class="label">SOS</div></div>
+                        <div class="stat-item"><div class="value" id="stat-detected">0</div><div class="label">Detected</div></div>
+                        <div class="stat-item"><div class="value" id="stat-rescued">0</div><div class="label">Rescued</div></div>
+                        <div class="stat-item"><div class="value" id="stat-supplies">0</div><div class="label">Supplies</div></div>
+                        <div class="stat-item"><div class="value" id="stat-deceased">0</div><div class="label">Deceased</div></div>
+                    </div>
+                </div>
+            </div>
+            <div id="alerts-container" class="sidebar-card">
+                <div class="card-header"><i class="fa-solid fa-triangle-exclamation"></i> Alert Log</div>
+                <div class="card-content" id="alertList"></div>
+            </div>
+        </aside>
+
+        <main id="main-content">
+            <div id="video-container" class="main-card">
+                <img id="videoFeed" src="http://127.0.0.1:8000/video" alt="Live Drone Feed"/>
+            </div>
+            <div id="map-container" class="main-card">
+                <div id="map"></div>
+            </div>
+        </main>
+    </div>
+    
+    <audio id="alertSound" src="https://www.soundjay.com/button/sounds/button-16.mp3" preload="auto"></audio>
 
     <script>
+        // All JavaScript code is complete and unabbreviated
         const BASE_URL = "http://127.0.0.1:5000";
-        let map, droneMarker;
-        let alertMarkers = [];
-
-        // --- Map and Marker Icons ---
+        let map, droneMarker, flightPathPolyline, missionTimerInterval;
+        let alertMarkers = {};
+        let knownAlertIds = new Set();
         const droneIcon = L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/847/847969.png', iconSize: [40, 40], iconAnchor: [20, 20] });
         const alertIcons = {
             detected: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/149/149071.png', iconSize: [30, 30], iconAnchor: [15, 30] }),
-            safe: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/190/190411.png', iconSize: [30, 30], iconAnchor: [15, 30] }),
             medical: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/3125/3125713.png', iconSize: [30, 30], iconAnchor: [15, 30] }),
             rescued: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/2947/2947231.png', iconSize: [30, 30], iconAnchor: [15, 30] }),
-            supplies: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/3063/3063861.png', iconSize: [30, 30], iconAnchor: [15, 30] })
+            supplies: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/3063/3063861.png', iconSize: [30, 30], iconAnchor: [15, 30] }),
+            died: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/748/748136.png', iconSize: [30, 30], iconAnchor: [15, 30] }),
+            sos: L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/1940/1940643.png', iconSize: [40, 40], iconAnchor: [20, 20] })
         };
-
+        
         function initializeMap(lat, lon) {
-            map = L.map('map').setView([lat, lon], 15);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }).addTo(map);
-            droneMarker = L.marker([lat, lon], { icon: droneIcon }).addTo(map);
+             map = L.map('map', { zoomControl: false }).setView([lat, lon], 18);
+             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+             L.control.zoom({ position: 'bottomright' }).addTo(map);
+             droneMarker = L.marker([lat, lon], { icon: droneIcon }).addTo(map);
+             flightPathPolyline = L.polyline([], { color: '#007bff', weight: 3, opacity: 0.8 }).addTo(map);
         }
+
+        document.getElementById('btn-end').addEventListener('click', () => {
+            if (confirm("Are you sure you want to end the mission and generate the report?")) {
+                window.location.href = `${BASE_URL}/operation/end`;
+                if (missionTimerInterval) clearInterval(missionTimerInterval);
+            }
+        });
 
         async function fetchData() {
             try {
-                // *** CORRECTED THIS LINE ***
-                const response = await fetch(`${BASE_URL}/alerts`);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
+                const response = await fetch(`${BASE_URL}/data`);
                 const data = await response.json();
+                if (!data.mission_active) {
+                    alert("Mission has not been started or has ended. Redirecting to start page.");
+                    window.location.href = '/';
+                    return;
+                }
+                
+                if (!missionTimerInterval) startMissionTimer(data.start_time);
                 updateUI(data);
-            } catch (error) {
-                console.error('Error fetching data:', error);
-            }
+            } catch (error) { console.error('Error fetching data:', error); }
         }
 
         function updateUI(data) {
-            if (data.drone) {
-                const { lat, lon } = data.drone;
-                droneMarker.setLatLng([lat, lon]);
-            }
+            document.getElementById('mission-header').querySelector('span').textContent = data.mission_name;
+            document.getElementById('stat-sos').textContent = data.stats.sos;
+            document.getElementById('stat-detected').textContent = data.stats.total_detected;
+            document.getElementById('stat-rescued').textContent = data.stats.rescued;
+            document.getElementById('stat-supplies').textContent = data.stats.medical_supplies;
+            document.getElementById('stat-deceased').textContent = data.stats.deceased;
 
-            alertMarkers.forEach(marker => map.removeLayer(marker));
-            alertMarkers = [];
+            if(data.drone) { droneMarker.setLatLng([data.drone.lat, data.drone.lon]); }
+            if(data.path) { flightPathPolyline.setLatLngs(data.path); }
+
             const alertList = document.getElementById('alertList');
             alertList.innerHTML = '';
+            const currentAlertsOnMap = new Set();
+            
+            const sortedAlerts = data.alerts.sort((a, b) => {
+                if (a.status === 'sos' && b.status !== 'sos') return -1;
+                if (a.status !== 'sos' && b.status === 'sos') return 1;
+                return 0;
+            });
 
-            data.alerts.slice().reverse().forEach(alert => {
-                const icon = alertIcons[alert.status] || alertIcons.detected;
-                const marker = L.marker([alert.lat, alert.lon], { icon }).addTo(map)
-                    .bindPopup(`<b>Status:</b> ${alert.status}<br><b>Time:</b> ${alert.time}<br><b>Coords:</b> ${alert.lat.toFixed(5)}, ${alert.lon.toFixed(5)}`);
-                alertMarkers.push(marker);
-
+            sortedAlerts.forEach(alert => {
+                currentAlertsOnMap.add(alert.id);
+                if (!knownAlertIds.has(alert.id)) {
+                    document.getElementById('alertSound').play();
+                    knownAlertIds.add(alert.id);
+                }
+                updateAlertMarker(alert);
+                
                 const alertDiv = document.createElement('div');
-                alertDiv.className = 'alert-item';
+                alertDiv.className = `alert-item status-${alert.status}`;
+                alertDiv.id = `alert-${alert.id}`;
+                alertDiv.onclick = () => focusOnAlert(alert.lat, alert.lon);
+                
+                const pinIcon = alert.status === 'sos' ? `<i class="fa-solid fa-thumbtack pin-icon"></i>` : '';
+
                 alertDiv.innerHTML = `
-                    <strong>Time:</strong> ${alert.time}<br>
-                    <strong>Status:</strong> ${alert.status}<br>
-                    <strong>Location:</strong> ${alert.lat.toFixed(5)}, ${alert.lon.toFixed(5)}
-                    <div class="button-group">
-                        <button class="safe" onclick="updateAlertStatus('${alert.id}', 'safe')">Safe</button>
-                        <button class="medical" onclick="updateAlertStatus('${alert.id}', 'medical')">Medical</button>
-                        <button class="rescued" onclick="updateAlertStatus('${alert.id}', 'rescued')">Rescued</button>
-                        <button class="supplies" onclick="updateAlertStatus('${alert.id}', 'supplies')">Needs Supplies</button>
+                    ${pinIcon}
+                    <div class="alert-details">
+                        <span><i class="fa-solid fa-clock"></i> ${alert.time}</span>
+                        <span><strong>${alert.status.toUpperCase()}</strong></span>
+                    </div>
+                    <div><i class="fa-solid fa-location-dot"></i> ${alert.lat.toFixed(5)}, ${alert.lon.toFixed(5)}</div>
+                    <div class="button-group" onclick="event.stopPropagation()">
+                        <button class="btn-sos" onclick="updateAlertStatus('${alert.id}', 'sos', event)">SOS</button>
+                        <button class="btn-medical" onclick="updateAlertStatus('${alert.id}', 'medical', event)">Medical</button>
+                        <button class="btn-rescued" onclick="updateAlertStatus('${alert.id}', 'rescued', event)">Rescued</button>
+                        <button class="btn-supplies" onclick="updateAlertStatus('${alert.id}', 'supplies', event)">Supplies</button>
+                        <button class="btn-died" onclick="updateAlertStatus('${alert.id}', 'died', event)">Deceased</button>
                     </div>
                 `;
                 alertList.appendChild(alertDiv);
             });
+            
+            Object.keys(alertMarkers).forEach(markerId => {
+                if (!currentAlertsOnMap.has(markerId)) {
+                    map.removeLayer(alertMarkers[markerId]);
+                    delete alertMarkers[markerId];
+                }
+            });
+        }
+        
+        function startMissionTimer(startTime) {
+            if (missionTimerInterval) clearInterval(missionTimerInterval);
+            const start = new Date(startTime);
+            missionTimerInterval = setInterval(() => {
+                const now = new Date();
+                const diff = now - start;
+                const hours = String(Math.floor(diff / 3600000)).padStart(2, '0');
+                const minutes = String(Math.floor((diff % 3600000) / 60000)).padStart(2, '0');
+                const seconds = String(Math.floor((diff % 60000) / 1000)).padStart(2, '0');
+                document.getElementById('mission-timer').textContent = `${hours}:${minutes}:${seconds}`;
+            }, 1000);
         }
 
-        async function updateAlertStatus(id, status) {
-            try {
-                await fetch(`${BASE_URL}/alert/${id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status })
-                });
-                fetchData();
-            } catch (error) {
-                console.error('Error updating status:', error);
+        function updateAlertMarker(alert) {
+            const icon = alertIcons[alert.status] || alertIcons.detected;
+            const popupContent = `<b>Status:</b> ${alert.status}<br><b>Coords:</b> ${alert.lat.toFixed(5)}, ${alert.lon.toFixed(5)}`;
+            if (alertMarkers[alert.id]) {
+                alertMarkers[alert.id].setLatLng([alert.lat, alert.lon]).setIcon(icon).setPopupContent(popupContent);
+            } else {
+                alertMarkers[alert.id] = L.marker([alert.lat, alert.lon], { icon }).addTo(map).bindPopup(popupContent);
             }
         }
-
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                pos => initializeMap(pos.coords.latitude, pos.coords.longitude),
-                () => initializeMap(11.0168, 76.9558)
-            );
-        } else {
-            initializeMap(11.0168, 76.9558);
+        
+        async function updateAlertStatus(id, status, event) {
+            event.stopPropagation();
+            await fetch(`${BASE_URL}/alert/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status })
+            });
+            fetchData();
         }
 
-        setInterval(fetchData, 2000);
+        function focusOnAlert(lat, lon) {
+            map.flyTo([lat, lon], 18, { animate: true, duration: 1.5 });
+        }
+
+        // --- Initial Load ---
+        // *** NEW: Data fetching starts on page load, assuming mission has begun ***
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeMap(13.0827, 80.2707);
+            fetchData(); // Initial data fetch
+            setInterval(fetchData, 2500); // Start polling
+        });
     </script>
 </body>
 </html>
